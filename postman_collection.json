@@ -1,0 +1,187 @@
+{
+  "info": {
+    "name": "TaskHub API - Hari 3 Workflow 14 Langkah (Slide 48)",
+    "description": "Koleksi Postman/Insomnia resmi untuk pengujian alur end-to-end: autentikasi lintas-pengguna, BOLA, Optimistic Concurrency Control, Idempotency Key, Webhook HMAC & Deduplikasi.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Login Alice",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      }
+    },
+    {
+      "name": "02. Simpan Access Token Alice",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      }
+    },
+    {
+      "name": "03. Buat Task (Alice)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Review Kontrak API Sesi 6-8 NQA\",\n  \"description\": \"Menutup alur end-to-end\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/tasks"
+      }
+    },
+    {
+      "name": "04. List Task (Alice)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/tasks"
+      }
+    },
+    {
+      "name": "05. Detail Task (Alice)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}"
+      }
+    },
+    {
+      "name": "06. PATCH Task dengan Version Benar (version=1)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Review Kontrak API (Revisi Selesai)\",\n  \"version\": 1\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}"
+      }
+    },
+    {
+      "name": "07. PATCH Ulang dengan Version Lama (Ekspektasi 409 Conflict)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Konflik Penimpaan Data\",\n  \"version\": 1\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}"
+      }
+    },
+    {
+      "name": "08. Login Bob",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"bob\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login"
+      }
+    },
+    {
+      "name": "09. Bob Akses Task Alice (Ekspektasi 403 Forbidden - BOLA)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{tokenBob}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}"
+      }
+    },
+    {
+      "name": "10. Payload owner_id pada Create (Ekspektasi 422 - Mass Assignment)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Injeksi Mass Assignment\",\n  \"owner_id\": \"usr_bob\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/tasks"
+      }
+    },
+    {
+      "name": "11. Notify Task dengan Idempotency-Key Stabil",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"channel\": \"webhook\",\n  \"priority\": \"high\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}/notify"
+      }
+    },
+    {
+      "name": "12. Ulangi Notify dengan Key/Payload Sama (Ekspektasi Cached Response)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"channel\": \"webhook\",\n  \"priority\": \"high\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}/notify"
+      }
+    },
+    {
+      "name": "13. Hapus Task (Alice)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}"
+      }
+    },
+    {
+      "name": "14. Detail Task Dihapus (Ekspektasi 404 Not Found)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{tokenAlice}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/tasks/{{taskId}}"
+      }
+    }
+  ]
+}

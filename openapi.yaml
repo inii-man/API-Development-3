@@ -1,0 +1,430 @@
+openapi: 3.0.3
+info:
+  title: TaskHub API - Training Hari 3 (NQA Syllabus)
+  version: 1.0.0
+  description: |
+    Spesifikasi resmi Kontrak API TaskHub Hari 3 (Contract-First Design).
+    Mencakup webhook event-driven dengan verifikasi tanda tangan HMAC-SHA256,
+    manajemen resource Task dengan mitigasi BOLA dan Version Concurrency,
+    pola keandalan Idempotency Key, serta health checks dan observabilitas.
+servers:
+  - url: http://127.0.0.1:3000
+    description: Server Lokal Development / Lab
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Token opaque ter-hash SHA-256 yang diperoleh melalui endpoint `/api/v1/auth/login`.
+        Format: `Bearer th_<64_hex_characters>`
+    WebhookHMAC:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: |
+        Tanda tangan HMAC-SHA256 dari pesan yang digabung: `${timestamp}.${rawBody}`
+        menggunakan WEBHOOK_SECRET bersama.
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: alice
+        password:
+          type: string
+          format: password
+          example: password123
+
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Login berhasil
+        token:
+          type: string
+          example: th_4f8b2d1c9e7a6f5e3d2c1b0a9f8e7d6c5b4a39281706f5e4d3c2b1a0f9e8d7c6
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              example: usr_alice
+            username:
+              type: string
+              example: alice
+            role:
+              type: string
+              example: member
+            teamId:
+              type: string
+              example: team_a
+            tenantId:
+              type: string
+              example: tenant_1
+        expiresAt:
+          type: string
+          format: date-time
+
+    TaskItem:
+      type: object
+      properties:
+        id:
+          type: string
+          example: tsk_demo_001
+        title:
+          type: string
+          example: Review kontrak API Sesi 6-8 NQA
+        description:
+          type: string
+          nullable: true
+          example: Menutup alur end-to-end dengan bukti penerimaan
+        status:
+          type: string
+          enum: [open, done, completed]
+          example: open
+        version:
+          type: integer
+          description: Nomor versi untuk Optimistic Concurrency Control
+          example: 1
+        owner_id:
+          type: string
+          example: usr_alice
+        team_id:
+          type: string
+          example: team_a
+        tenant_id:
+          type: string
+          example: tenant_1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTaskPayload:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          example: Implementasi Webhook Receiver
+        description:
+          type: string
+          example: Membaca raw body dan memverifikasi HMAC SHA-256
+        status:
+          type: string
+          enum: [open, done, completed]
+          default: open
+
+    UpdateTaskPayload:
+      type: object
+      required:
+        - version
+      properties:
+        title:
+          type: string
+          example: Implementasi Webhook Receiver (Updated)
+        description:
+          type: string
+          example: Sudah ditambahkan pengujian Supertest dan Vitest
+        status:
+          type: string
+          enum: [open, done, completed]
+        version:
+          type: integer
+          description: Versi saat ini di client (Optimistic Locking)
+          example: 1
+
+    WebhookEventPayload:
+      type: object
+      required:
+        - id
+        - type
+        - data
+      properties:
+        id:
+          type: string
+          description: Event ID unik untuk deduplikasi
+          example: evt_demo_001
+        type:
+          type: string
+          enum: [task.completed.v1]
+          description: Jenis event yang disepakati dalam kontrak
+          example: task.completed.v1
+        data:
+          type: object
+          required:
+            - taskId
+          properties:
+            taskId:
+              type: string
+              description: ID task yang diselesaikan
+              example: tsk_demo
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Bad Request
+        detail:
+          type: string
+          example: Deskripsi kegagalan request yang aman tanpa bocor data kredensial
+        errors:
+          type: object
+          description: Rincian kesalahan validasi Zod jika ada
+
+paths:
+  /api/v1/auth/login:
+    post:
+      summary: Login Pengguna TaskHub
+      description: Otentikasi username dan password, mengembalikan Opaque Bearer Token 24 jam.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Payload login cacat sintaks atau format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Username atau password salah (tanpa kebocoran detail)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/tasks:
+    get:
+      summary: Menampilkan Daftar Task
+      description: Mengambil seluruh tugas yang dapat diakses dalam tenant pengguna yang terautentikasi.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daftar tugas berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskItem'
+                  total:
+                    type: integer
+        '401':
+          description: Token tidak ada atau kedaluwarsa
+    post:
+      summary: Membuat Task Baru
+      description: Membuat task baru. Properti `owner_id` dan `role` dilarang disuplai oleh client (Mass Assignment mitigation).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskPayload'
+      responses:
+        '201':
+          description: Task berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskItem'
+        '401':
+          description: Unauthorized
+        '422':
+          description: Mass Assignment terdeteksi atau validasi skema gagal
+
+  /api/v1/tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID unik task
+    get:
+      summary: Rincian Task
+      description: Mengambil detail satu task dengan verifikasi kepemilikan BOLA (Broken Object Level Authorization).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Detail task ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: BOLA Violation - Pengguna mencoba membaca data milik akun lain
+        '404':
+          description: Task tidak ditemukan
+    patch:
+      summary: Memperbarui Task (Optimistic Concurrency)
+      description: Memperbarui properti task dengan mencocokkan field version saat ini.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskPayload'
+      responses:
+        '200':
+          description: Task berhasil diperbarui dan versi naik 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: BOLA Violation
+        '409':
+          description: Optimistic Concurrency Conflict - Versi di server telah berubah
+        '422':
+          description: Modifikasi owner_id terdeteksi atau input tidak valid
+    delete:
+      summary: Menghapus Task
+      description: Menghapus task milik pengguna (BOLA protected).
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Task berhasil dihapus permanen
+        '401':
+          description: Unauthorized
+        '403':
+          description: BOLA Violation
+        '404':
+          description: Task tidak ditemukan
+
+  /api/v1/tasks/{id}/notify:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+        description: Kunci idempotensi unik untuk pengulangan aman (Slide 48)
+    post:
+      summary: Notifikasi Task dengan Idempotency Key
+      description: Mengirim instruksi notifikasi secara aman. Pengulangan dengan key dan payload sama menghasilkan response identik dari cache.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Notifikasi terkirim (atau hasil replay)
+        '400':
+          description: Header Idempotency-Key tidak disertakan
+        '409':
+          description: Konflik - Kunci idempotensi yang sama digunakan dengan payload berbeda
+
+  /webhooks/taskhub:
+    post:
+      summary: Penerima Webhook TaskHub
+      description: |
+        Menerima notifikasi event `task.completed.v1`.
+        Memvalidasi raw body Buffer, header X-Timestamp (toleransi 300 detik),
+        dan tanda tangan HMAC-SHA256 constant-time comparison sebelum parsing JSON.
+        Menyimpan event ke durable inbox SQLite sebelum mengembalikan status HTTP 202 Accepted.
+      parameters:
+        - name: X-Timestamp
+          in: header
+          required: true
+          schema:
+            type: integer
+          description: Unix timestamp saat event dibuat
+        - name: X-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: HMAC-SHA256 signature dalam format hexadecimal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookEventPayload'
+      responses:
+        '202':
+          description: Event diterima dan tersimpan durabel ke inbox
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: boolean
+                    example: true
+                  duplicate:
+                    type: boolean
+                    description: Bernilai true jika event ID sama persis pernah diterima sebelumnya
+                    example: false
+        '400':
+          description: Signature tidak valid, timestamp stale (>300s), atau sintaks JSON rusak
+        '409':
+          description: Konflik hash payload - Event ID sama tetapi data payload diubah
+        '422':
+          description: Skema event tidak valid (event type salah atau taskId bukan string)
+
+  /health/liveness:
+    get:
+      summary: Liveness Probe
+      description: Memverifikasi proses Node.js hidup dan tidak hang (Slide 57).
+      responses:
+        '200':
+          description: Server hidup
+
+  /health/readiness:
+    get:
+      summary: Readiness Probe
+      description: Memverifikasi kesiapan menerima trafik (koneksi database SQLite responsif) (Slide 57).
+      responses:
+        '200':
+          description: Server dan basis data siap
+        '503':
+          description: Server belum siap menerima trafik
+
+  /metrics:
+    get:
+      summary: Sinyal Operasional & Metrik SLO
+      description: Menampilkan latensi persentil p50/p95/p99, error rate, dan backlog antrean inbox (Slide 52 & 55).
+      responses:
+        '200':
+          description: Data metrik real-time

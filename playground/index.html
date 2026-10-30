@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskHub Hari 3 Playground - Webhook, Microservices & Pengujian End-to-End</title>
+  <!-- Google Fonts Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/playground/style.css" />
+</head>
+<body>
+  <!-- HEADER UTAMA DENGAN GLASSMORPHISM -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-badge">HARI 3</div>
+        <div class="brand-text">
+          <h1>TaskHub API Lab & Playground</h1>
+          <p>Webhook, Microservices, Pengujian & Bukti Operasi (NQA Syllabus)</p>
+        </div>
+      </div>
+
+      <!-- KONTROL SERVER & AKTOR AKTIF -->
+      <div class="header-controls">
+        <div class="status-badge-group">
+          <span class="status-indicator">
+            <span class="pulse-dot"></span>
+            <span>TaskHub Gateway :3000</span>
+          </span>
+          <span class="status-indicator" style="margin-left: 0.5rem; color: var(--accent-cyan);">
+            SQLite WAL Active
+          </span>
+        </div>
+
+        <div class="user-selector-wrapper">
+          <label for="user-select" style="font-size: 0.8rem; color: var(--text-muted);">Aktor:</label>
+          <select id="user-select" class="custom-select">
+            <option value="alice">👩 Alice (Member · Tim A · Tenant 1)</option>
+            <option value="bob">👨 Bob (Member · Tim B · Tenant 1)</option>
+            <option value="charlie">👔 Charlie (Manager · Tim A · Tenant 1)</option>
+            <option value="diana">🛡️ Diana (Admin · Tim A · Tenant 1)</option>
+            <option value="eve">🕵️ Eve (Member · Tim A · Tenant 2)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- TOKEN INFO BAR -->
+  <div class="token-bar">
+    <div class="token-bar-container">
+      <div class="token-info">
+        <span style="color: var(--text-muted); font-size: 0.8rem;">Kredensial Sesi:</span>
+        <code class="token-display" id="active-token-display">Bearer th_test_token_alice</code>
+        <button class="btn-mini" id="btn-copy-token">📋 Salin</button>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-dim);" id="user-meta-summary">
+        Role: <strong style="color: var(--text-main);">member</strong> | Team: <strong style="color: var(--text-main);">team_a</strong> | Tenant: <strong style="color: var(--text-main);">tenant_1</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="main-layout">
+    <!-- NAVIGASI TAB -->
+    <nav class="tabs-nav" aria-label="Modul Praktikum">
+      <button class="tab-btn active" data-tab="tab-webhook" id="btn-tab-webhook">
+        <span>📨</span>
+        <span>1. Webhook & HMAC Studio</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-inbox" id="btn-tab-inbox">
+        <span>📥</span>
+        <span>2. Durable Inbox & Worker</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-microservices" id="btn-tab-microservices">
+        <span>🔄</span>
+        <span>3. Outbox & SAGA Simulator</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-workflow" id="btn-tab-workflow">
+        <span>🧪</span>
+        <span>4. Workflow 14-Langkah</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-matrix" id="btn-tab-matrix">
+        <span>🛡️</span>
+        <span>5. Matriks Uji Keamanan</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-observability" id="btn-tab-observability">
+        <span>📊</span>
+        <span>6. Observabilitas & Produksi</span>
+      </button>
+    </nav>
+
+    <!-- =========================================================================
+         TAB 1: WEBHOOK & HMAC SIGNATURE STUDIO (Slide 9 - 34)
+         ========================================================================= -->
+    <section class="tab-panel active" id="tab-webhook">
+      <div class="grid-2">
+        <!-- Panel Kiri: Form Generator & Pengirim Event -->
+        <div class="card">
+          <div class="card-header">
+            <h3>📨 Webhook Delivery Studio</h3>
+            <span class="slide-tag">Slide 9, 11, 20-23, 29-33</span>
+          </div>
+
+          <div class="alert-box">
+            <strong>Aturan Kontrak TaskHub:</strong> Endpoint <code>POST /webhooks/taskhub</code> memverifikasi Buffer <code>signedMessage = Buffer.concat([Buffer.from(timestamp + '.'), rawBody])</code> dengan HMAC-SHA256 sebelum membaca JSON!
+          </div>
+
+          <div class="form-group">
+            <label for="webhook-secret-input">Shared Secret (WEBHOOK_SECRET):</label>
+            <input type="text" id="webhook-secret-input" class="form-control" value="4f8b2d1c9e7a6f5e3d2c1b0a9f8e7d6c5b4a39281706f5e4d3c2b1a0f9e8d7c6" />
+          </div>
+
+          <div class="grid-2" style="gap: 0.75rem;">
+            <div class="form-group">
+              <label for="webhook-timestamp-input">X-Timestamp (Epoch Seconds):</label>
+              <input type="number" id="webhook-timestamp-input" class="form-control" />
+            </div>
+            <div class="form-group">
+              <label>&nbsp;</label>
+              <button class="btn btn-secondary btn-block" id="btn-refresh-timestamp">⏱️ Waktu Sekarang</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="webhook-payload-input">Raw JSON Body (Maks 64KB - Slide 9):</label>
+            <textarea id="webhook-payload-input" class="form-control" rows="5">
+{
+  "id": "evt_demo_001",
+  "type": "task.completed.v1",
+  "data": {
+    "taskId": "tsk_demo"
+  }
+}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="webhook-signature-preview">Kalkulasi X-Signature (HMAC-SHA256):</label>
+            <input type="text" id="webhook-signature-preview" class="form-control" readonly style="color: var(--accent-cyan); font-family: var(--font-mono);" />
+          </div>
+
+          <div class="btn-group-grid">
+            <button class="btn btn-primary" id="btn-send-valid">
+              🚀 1. Kirim Event Sah (202)
+            </button>
+            <button class="btn btn-secondary" id="btn-send-duplicate">
+              🔁 2. Kirim Duplikat (202 dedup)
+            </button>
+            <button class="btn btn-warning" id="btn-send-tampered">
+              ⚠️ 3. Kirim Tampered Hash (409)
+            </button>
+            <button class="btn btn-danger" id="btn-send-bad-sig">
+              🛑 4. Signature Salah (400)
+            </button>
+            <button class="btn btn-danger" id="btn-send-stale-ts">
+              ⌛ 5. Timestamp Stale (400)
+            </button>
+            <button class="btn btn-warning" id="btn-send-bad-schema">
+              ❌ 6. Skema Cacat (422)
+            </button>
+          </div>
+        </div>
+
+        <!-- Panel Kanan: Respons & Penjelasan Teoretis -->
+        <div class="card">
+          <div class="card-header">
+            <h3>🔍 Live Response & Analisis Kontrak</h3>
+            <span id="response-status-badge" class="status-pill status-200">Menunggu Permintaan</span>
+          </div>
+
+          <div class="form-group">
+            <label>Analisis Keputusan Sistem (Sesuai Slide Presentasi):</label>
+            <div id="slide-explanation-box" class="alert-box" style="margin-top: 0;">
+              Klik salah satu tombol uji di sebelah kiri untuk melihat proses verifikasi tanda tangan dan penyimpanan durabel.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Respons Body JSON:</label>
+            <pre id="response-body-viewer" class="code-inspector">// Respons HTTP server TaskHub akan muncul di sini</pre>
+          </div>
+
+          <div class="form-group">
+            <label>Rincian Buffer Pesan Tertandatangani (Signed Message):</label>
+            <pre id="signed-message-debug" class="code-inspector" style="max-height: 120px;">// Buffer.concat([timestamp + ".", rawBody])</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 2: DURABLE INBOX & BACKGROUND WORKER (Slide 17, 18, 24, 25, 26, 32)
+         ========================================================================= -->
+    <section class="tab-panel" id="tab-inbox">
+      <div class="card">
+        <div class="card-header">
+          <h3>📥 SQLite Durable Inbox & Background Worker</h3>
+          <div>
+            <button class="btn btn-success" id="btn-run-worker-tick">⚙️ Jalankan Worker Tick Sekarang</button>
+            <button class="btn btn-secondary" id="btn-refresh-inbox-tables" style="margin-left: 0.5rem;">🔄 Segarkan Data</button>
+          </div>
+        </div>
+
+        <div class="alert-box">
+          <strong>Prinsip Inti Slide 17 & 18:</strong>
+          <em>"Durable inbox: Jangan kirim 2xx sebelum tersimpan di database! Status received berarti event aman, worker memproses secara asinkron lalu mengubah status menjadi processed dan mencatat efek."</em>
+        </div>
+
+        <div style="margin-top: 1.5rem;">
+          <h4 style="margin-bottom: 0.75rem; color: var(--accent-cyan);">Tabel <code>inbox</code> (Slide 24 & 32):</h4>
+          <div class="table-responsive">
+            <table class="custom-table" id="table-inbox-data">
+              <thead>
+                <tr>
+                  <th>Event ID</th>
+                  <th>Provider</th>
+                  <th>Event Type</th>
+                  <th>Payload Hash (SHA-256)</th>
+                  <th>Status</th>
+                  <th>Retry</th>
+                  <th>Waktu Diterima</th>
+                  <th>Waktu Diproses</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-inbox-rows">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim);">Memuat catatan inbox...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem;">
+          <h4 style="margin-bottom: 0.75rem; color: var(--accent-green);">Tabel <code>effects</code> (Slide 25 & 32):</h4>
+          <div class="table-responsive">
+            <table class="custom-table" id="table-effects-data">
+              <thead>
+                <tr>
+                  <th>Effect ID</th>
+                  <th>Event ID</th>
+                  <th>Task ID</th>
+                  <th>Tipe Efek</th>
+                  <th>Waktu Eksekusi</th>
+                  <th>Keterangan</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-effects-rows">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Memuat efek worker...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 3: MICROSERVICES OUTBOX & SAGA SIMULATOR (Slide 35 - 40)
+         ========================================================================= -->
+    <section class="tab-panel" id="tab-microservices">
+      <div class="grid-2">
+        <!-- Sub-panel 1: Transactional Outbox Pattern -->
+        <div class="card">
+          <div class="card-header">
+            <h3>📦 Transactional Outbox Pattern</h3>
+            <span class="slide-tag">Slide 38 & 39</span>
+          </div>
+
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Mencegah <strong>Dual Write Problem</strong> dengan menyimpan Task dan Outbox Event dalam satu transaksi atomik database lokal.
+          </p>
+
+          <div class="form-group">
+            <label for="outbox-task-title">Judul Task Baru:</label>
+            <input type="text" id="outbox-task-title" class="form-control" value="Pengadaan Server Cluster NQA" />
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;">
+            <button class="btn btn-primary" id="btn-create-outbox-task">➕ Simpan Atomik (Task + Outbox)</button>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="check-simulate-publisher-crash" />
+              <span style="color: var(--accent-yellow);">Simulasikan Publisher Crash Setelah Pengiriman (Slide 39)</span>
+            </label>
+          </div>
+
+          <button class="btn btn-secondary btn-block" id="btn-publish-outbox">📡 Jalankan Outbox Relay Publisher</button>
+
+          <h4 style="margin: 1.25rem 0 0.5rem 0; font-size: 0.9rem; color: var(--accent-cyan);">Daftar Antrean Outbox:</h4>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr><th>ID</th><th>Event Type</th><th>Status</th><th>Waktu</th></tr>
+              </thead>
+              <tbody id="tbody-outbox-list">
+                <tr><td colspan="4" style="text-align: center; color: var(--text-dim);">Kosong</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Sub-panel 2: Saga Pattern Simulator -->
+        <div class="card">
+          <div class="card-header">
+            <h3>🔄 SAGA Pattern & Kompensasi</h3>
+            <span class="slide-tag">Slide 40</span>
+          </div>
+
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Mengelola transaksi terdistribusi multi-service tanpa dua-fase commit (2PC). Jika pembayaran gagal, alur menjalankan <strong>Transaksi Kompensasi</strong> (Rollback Bisnis).
+          </p>
+
+          <!-- Visual Track Node -->
+          <div class="saga-track">
+            <div class="saga-node" id="saga-node-1">
+              <span>01</span>
+              <span>Reservasi</span>
+            </div>
+            <div class="saga-node" id="saga-node-2">
+              <span>02</span>
+              <span>Bayar</span>
+            </div>
+            <div class="saga-node" id="saga-node-3">
+              <span>03</span>
+              <span>Konfirmasi</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="saga-item-name">Item Pesanan / Resource:</label>
+            <input type="text" id="saga-item-name" class="form-control" value="Cloud Kubernetes Cluster 16 Core" />
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="check-simulate-payment-fail" />
+              <span style="color: var(--accent-red);">Simulasikan Pembayaran Gagal di Langkah 02 (Picu Kompensasi)</span>
+            </label>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btn-execute-saga">🚀 Eksekusi Alur SAGA</button>
+
+          <div class="form-group" style="margin-top: 1.25rem;">
+            <label>Riwayat Eksekusi Saga:</label>
+            <pre id="saga-execution-log" class="code-inspector" style="max-height: 180px;">// Hasil eksekusi SAGA akan ditampilkan di sini</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 4: WORKFLOW 14-LANGKAH (Slide 48)
+         ========================================================================= -->
+    <section class="tab-panel" id="tab-workflow">
+      <div class="card">
+        <div class="card-header">
+          <h3>🧪 Postman / Insomnia: Workflow 14 Langkah</h3>
+          <button class="btn btn-primary" id="btn-run-all-14-steps">▶️ Jalankan Semua 14 Langkah Sekaligus</button>
+        </div>
+
+        <div class="alert-box">
+          <strong>Rujukan Slide 48:</strong> Alur ini membuktikan end-to-end: autentikasi lintas user, pembuktian BOLA (Bob dilarang buka task Alice), Mass Assignment (injeksi owner_id ditolak 422), Optimistic Concurrency Control (update version basi ditolak 409), dan Idempotency Key notifikasi.
+        </div>
+
+        <div class="workflow-list" id="workflow-steps-container">
+          <!-- 14 langkah di-render otomatis oleh JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 5: MATRIKS UJI KEAMANAN (Slide 50)
+         ========================================================================= -->
+    <section class="tab-panel" id="tab-matrix">
+      <div class="card">
+        <div class="card-header">
+          <h3>🛡️ Security Test Matrix: 15 Skenario Uji Penolakan</h3>
+          <span class="slide-tag">Slide 50</span>
+        </div>
+
+        <div class="alert-box">
+          <strong>Tujuan Slide 50:</strong> Memeriksa matriks penolakan; memastikan sistem secara konsisten menolak pelanggaran batas keamanan dengan kode status HTTP yang tepat tanpa membocorkan kredensial.
+        </div>
+
+        <div class="table-responsive">
+          <table class="custom-table" id="table-security-matrix">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Skenario Pengujian</th>
+                <th>Target Kontrol</th>
+                <th>Ekspektasi HTTP</th>
+                <th>Aksi Uji</th>
+                <th>Hasil Real-Time</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-security-matrix">
+              <!-- Skenario matriks di-render oleh app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 6: OBSERVABILITAS & KESIAPAN PRODUKSI (Slide 52 - 69)
+         ========================================================================= -->
+    <section class="tab-panel" id="tab-observability">
+      <div class="grid-2">
+        <!-- Live Structured Logs -->
+        <div class="card">
+          <div class="card-header">
+            <h3>📜 Structured Logging Aman (Pino Stream)</h3>
+            <span class="slide-tag">Slide 54 & 55</span>
+          </div>
+
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+            <strong>Slide 54:</strong> Dicatat: <code>requestId</code>, <code>method</code>, <code>path</code> (tanpa query), <code>status</code>, <code>latencyMs</code>. 
+            <span style="color: var(--accent-red);">TIDAK DICETAK: Token, password, body, dan signature!</span>
+          </p>
+
+          <div class="log-stream" id="log-stream-container">
+            <!-- Entri log real-time -->
+          </div>
+        </div>
+
+        <!-- Metrics & Probes -->
+        <div class="card">
+          <div class="card-header">
+            <h3>🩺 Health Probes & Metrik SLO</h3>
+            <span class="slide-tag">Slide 52, 55, 57</span>
+          </div>
+
+          <div class="grid-2" style="gap: 1rem; margin-bottom: 1rem;">
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-sm);">
+              <div style="font-size: 0.75rem; color: var(--text-muted);">Liveness Probe (Slide 57)</div>
+              <div style="font-size: 1.2rem; font-weight: 700; color: var(--accent-green);" id="probe-liveness-val">ALIVE</div>
+              <div style="font-size: 0.72rem; color: var(--text-dim);" id="probe-liveness-time">Uptime: 0s</div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-sm);">
+              <div style="font-size: 0.75rem; color: var(--text-muted);">Readiness Probe (Slide 57)</div>
+              <div style="font-size: 1.2rem; font-weight: 700; color: var(--accent-cyan);" id="probe-readiness-val">READY</div>
+              <div style="font-size: 0.72rem; color: var(--text-dim);" id="probe-readiness-db">DB: SQLite Connected</div>
+            </div>
+          </div>
+
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+            <h4 style="font-size: 0.85rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">Target SLO & Latensi Persentil (Slide 52):</h4>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.35rem;">
+              <span>Target Ketersediaan:</span>
+              <strong>&ge; 99.5% Sukses</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.35rem;">
+              <span>Target Latensi (p95):</span>
+              <strong>&lt; 500 ms</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.35rem;">
+              <span>Tercatat Saat Ini (p50 / p95 / p99):</span>
+              <strong id="metric-latency-val" style="color: var(--accent-green); font-family: var(--font-mono);">0 ms / 0 ms / 0 ms</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+              <span>Inbox Queue Backlog:</span>
+              <strong id="metric-backlog-val" style="color: var(--accent-yellow);">0 items</strong>
+            </div>
+          </div>
+
+          <div class="alert-box" style="margin-bottom: 0;">
+            <strong>Checklist Produksi (Slide 58):</strong>
+            Reverse Proxy HTTPS, Secret Manager/KMS, Rate Limiting Terdistribusi (Redis), CI/CD Testing, dan Rencana Rollback Database.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>API Development Training Hari 3 &bull; Sesi 6 - 8 Silabus NQA &bull; Webhook &bull; Microservices &bull; Testing &bull; Operations</p>
+  </footer>
+
+  <script src="/playground/app.js"></script>
+</body>
+</html>
